@@ -106,7 +106,7 @@ optional arguments:
 # (c) 2013, Evan Wies <evan@neomantra.net>
 #
 # Inspired by the EC2 inventory plugin:
-# https://github.com/ansible/ansible/blob/devel/plugins/inventory/ec2.py
+# https://github.com/ansible/ansible/blob/devel/plugins/inventory/aws.py
 #
 # This file is part of Ansible,
 #
@@ -390,7 +390,7 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
             manager = DoManager(self.client_id, self.api_key)
             droplet_id = self.index['host_to_droplet'][host]
             droplet = self.sanitize_dict(manager.show_droplet(droplet_id))
-       
+
         if not droplet:
             return {}
 
@@ -399,7 +399,7 @@ or environment variables (DO_CLIENT_ID and DO_API_KEY)'''
         for k, v in droplet.items():
             info['do_'+k] = v
 
-        # Generate user-friendly variables (i.e. not the ID's) 
+        # Generate user-friendly variables (i.e. not the ID's)
         if droplet.has_key('region_id'):
             info['do_region'] = self.index['region_to_name'].get(droplet['region_id'])
         if droplet.has_key('size_id'):

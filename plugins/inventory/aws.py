@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 
 """
-EC2 external inventory script
+AWS external inventory script
 =================================
 
 Generates inventory that Ansible can understand by making API request to
-AWS EC2 using the Boto library.
+AWS using the Boto library.
 
 NOTE: This script assumes Ansible is being executed where the environment
 variables needed for Boto have already been set:
     export AWS_ACCESS_KEY_ID='AK123'
     export AWS_SECRET_ACCESS_KEY='abc123'
 
-This script also assumes there is an ec2.ini file alongside it.  To specify a
-different path to ec2.ini, define the EC2_INI_PATH environment variable:
+This script also assumes there is an aws.ini file alongside it.  To specify a
+different path to aws.ini, define the AWS_INI_PATH environment variable:
 
-    export EC2_INI_PATH=/path/to/my_ec2.ini
+    export EC2_INI_PATH=/path/to/my_aws.ini
 
 If you're using eucalyptus you need to set the above variables and
 you need to define:
@@ -201,15 +201,15 @@ class Ec2Inventory(object):
 
     def read_settings(self):
         """
-        Reads the settings from the ec2.ini file
+        Reads the settings from the aws.ini file
         """
 
         config = ConfigParser.SafeConfigParser()
         ec2_default_ini_path = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
-            'ec2.ini'
+            'aws.ini'
         )
-        ec2_ini_path = os.environ.get('EC2_INI_PATH', ec2_default_ini_path)
+        ec2_ini_path = os.environ.get('AWS_INI_PATH', ec2_default_ini_path)
         config.read(ec2_ini_path)
 
         # is eucalyptus?
@@ -239,7 +239,8 @@ class Ec2Inventory(object):
 
         # Destination addresses
         self.destination_variable = config.get('ec2', 'destination_variable')
-        self.vpc_destination_variable = config.get('ec2', 'vpc_destination_variable')
+        self.vpc_destination_variable = config.get('ec2',
+                                                   'vpc_destination_variable')
 
         # Route53
         self.route53_enabled = config.getboolean('ec2', 'route53')
@@ -253,8 +254,8 @@ class Ec2Inventory(object):
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
 
-        self.cache_path_cache = cache_dir + "/ansible-ec2.cache"
-        self.cache_path_index = cache_dir + "/ansible-ec2.index"
+        self.cache_path_cache = cache_dir + "/ansible-aws.cache"
+        self.cache_path_index = cache_dir + "/ansible-aws.index"
         self.cache_max_age = config.getint('ec2', 'cache_max_age')
 
     def parse_cli_args(self):
@@ -263,7 +264,7 @@ class Ec2Inventory(object):
         """
 
         parser = argparse.ArgumentParser(
-            description='Produce an Ansible Inventory file based on EC2'
+            description='Produce an Ansible Inventory file based on AWS'
         )
         parser.add_argument('--list', action='store_true', default=True,
                             help='List instances (default: True)')
@@ -273,7 +274,7 @@ class Ec2Inventory(object):
         parser.add_argument('--refresh-cache', action='store_true',
                             default=False,
                             help='Force refresh of cache by making API '
-                                 'requests to EC2 '
+                                 'requests to AWS '
                                  '(default: False - use cache files)')
         self.args = parser.parse_args()
 

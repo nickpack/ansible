@@ -82,7 +82,7 @@ notes:
     configured in ~/.pyrax.cfg, see
     https://github.com/rackspace/pyrax/blob/master/docs/getting_started.md#pyrax-configuration
   - RAX_META_PREFIX is an environment variable that changes the prefix used
-    for meta key/value groups. For compatibility with ec2.py set to
+    for meta key/value groups. For compatibility with aws.py set to
     RAX_META_PREFIX=tag
 requirements: [ "pyrax" ]
 examples:
