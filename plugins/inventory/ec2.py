@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-'''
+"""
 EC2 external inventory script
 =================================
 
@@ -22,7 +22,8 @@ you need to define:
 
     export EC2_URL=http://hostname_of_your_cc:port/services/Eucalyptus
 
-For more details, see: http://docs.pythonboto.org/en/latest/boto_config_tut.html
+For more details, see:
+http://docs.pythonboto.org/en/latest/boto_config_tut.html
 
 When run against a specific host, this script returns the following variables:
  - ec2_ami_launch_index
@@ -81,8 +82,8 @@ When run against a specific host, this script returns the following variables:
  - ec2_virtualization_type
  - ec2_vpc_id
 
-These variables are pulled out of a boto.ec2.instance object. There is a lack of
-consistency with variable spellings (camelCase and underscores) since this
+These variables are pulled out of a boto.ec2.instance object. There is a lack
+of consistency with variable spellings (camelCase and underscores) since this
 just loops through all variables the object exposes. It is preferred to use the
 ones with underscores when multiple exist.
 
@@ -92,7 +93,7 @@ variable named:
 
 Security groups are comma-separated in 'ec2_security_group_ids' and
 'ec2_security_group_names'.
-'''
+"""
 
 # (c) 2012, Peter Sankauskas
 #
@@ -131,11 +132,28 @@ except ImportError:
 
 
 class Ec2Inventory(object):
-    def _empty_inventory(self):
-        return {"_meta" : {"hostvars" : {}}}
+
+    eucalyptus = None
+    eucalyptus_host = None
+    regions = None
+    destination_variable = None
+    vpc_destination_variable = None
+    route53_enabled = False
+    route53_excluded_zones = None
+    cache_path_cache = None
+    cache_path_index = None
+    cache_max_age = None
+    args = []
+    route53_records = None
+
+    @staticmethod
+    def _empty_inventory():
+        return {"_meta": {"hostvars": {}}}
 
     def __init__(self):
-        ''' Main execution path '''
+        """
+        Main execution path
+        """
 
         # Inventory grouped by instance IDs, tags, security groups, regions,
         # and availability zones
@@ -167,9 +185,10 @@ class Ec2Inventory(object):
 
         print data_to_print
 
-
     def is_cache_valid(self):
-        ''' Determines if the cache files have expired, or if it is still valid '''
+        """
+        Determines if the cache files have expired, or if it is still valid
+        """
 
         if os.path.isfile(self.cache_path_cache):
             mod_time = os.path.getmtime(self.cache_path_cache)
@@ -180,12 +199,16 @@ class Ec2Inventory(object):
 
         return False
 
-
     def read_settings(self):
-        ''' Reads the settings from the ec2.ini file '''
+        """
+        Reads the settings from the ec2.ini file
+        """
 
         config = ConfigParser.SafeConfigParser()
-        ec2_default_ini_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ec2.ini')
+        ec2_default_ini_path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            'ec2.ini'
+        )
         ec2_ini_path = os.environ.get('EC2_INI_PATH', ec2_default_ini_path)
         config.read(ec2_ini_path)
 
@@ -199,17 +222,20 @@ class Ec2Inventory(object):
 
         # Regions
         self.regions = []
-        configRegions = config.get('ec2', 'regions')
-        configRegions_exclude = config.get('ec2', 'regions_exclude')
-        if (configRegions == 'all'):
+        config_regions = config.get('ec2', 'regions')
+        config_regions_exclude = config.get('ec2', 'regions_exclude')
+
+        if config_regions == 'all':
             if self.eucalyptus_host:
-                self.regions.append(boto.connect_euca(host=self.eucalyptus_host).region.name)
+                self.regions.append(
+                    boto.connect_euca(host=self.eucalyptus_host).region.name
+                )
             else:
                 for regionInfo in ec2.regions():
-                    if regionInfo.name not in configRegions_exclude:
+                    if regionInfo.name not in config_regions_exclude:
                         self.regions.append(regionInfo.name)
         else:
-            self.regions = configRegions.split(",")
+            self.regions = config_regions.split(",")
 
         # Destination addresses
         self.destination_variable = config.get('ec2', 'destination_variable')
@@ -230,24 +256,31 @@ class Ec2Inventory(object):
         self.cache_path_cache = cache_dir + "/ansible-ec2.cache"
         self.cache_path_index = cache_dir + "/ansible-ec2.index"
         self.cache_max_age = config.getint('ec2', 'cache_max_age')
-        
-
 
     def parse_cli_args(self):
-        ''' Command line argument processing '''
+        """
+        Command line argument processing
+        """
 
-        parser = argparse.ArgumentParser(description='Produce an Ansible Inventory file based on EC2')
+        parser = argparse.ArgumentParser(
+            description='Produce an Ansible Inventory file based on EC2'
+        )
         parser.add_argument('--list', action='store_true', default=True,
-                           help='List instances (default: True)')
+                            help='List instances (default: True)')
         parser.add_argument('--host', action='store',
-                           help='Get all the variables about a specific instance')
-        parser.add_argument('--refresh-cache', action='store_true', default=False,
-                           help='Force refresh of cache by making API requests to EC2 (default: False - use cache files)')
+                            help='Get all the variables about a specific '
+                                 'instance')
+        parser.add_argument('--refresh-cache', action='store_true',
+                            default=False,
+                            help='Force refresh of cache by making API '
+                                 'requests to EC2 '
+                                 '(default: False - use cache files)')
         self.args = parser.parse_args()
 
-
     def do_api_calls_update_cache(self):
-        ''' Do API calls to each region, and save data in cache files '''
+        """
+        Do API calls to each region, and save data in cache files
+        """
 
         if self.route53_enabled:
             self.get_route53_records()
@@ -259,10 +292,11 @@ class Ec2Inventory(object):
         self.write_to_cache(self.inventory, self.cache_path_cache)
         self.write_to_cache(self.index, self.cache_path_index)
 
-
     def get_instances_by_region(self, region):
-        ''' Makes an AWS EC2 API call to the list of instances in a particular
-        region '''
+        """
+        Makes an AWS EC2 API call to the list of instances in a particular
+        region
+        """
 
         try:
             if self.eucalyptus:
@@ -271,25 +305,29 @@ class Ec2Inventory(object):
             else:
                 conn = ec2.connect_to_region(region)
 
-            # connect_to_region will fail "silently" by returning None if the region name is wrong or not supported
+            # connect_to_region will fail "silently" by returning None if the
+            # region name is wrong or not supported
             if conn is None:
-                print("region name: %s likely not supported, or AWS is down.  connection to region failed." % region)
+                print("region name: %s likely not supported, or AWS is down.  "
+                      "connection to region failed." % region)
                 sys.exit(1)
- 
+
             reservations = conn.get_all_instances()
             for reservation in reservations:
                 for instance in reservation.instances:
                     self.add_instance(instance, region)
-        
+
         except boto.exception.BotoServerError, e:
-            if  not self.eucalyptus:
+            if not self.eucalyptus:
                 print "Looks like AWS is down again:"
             print e
             sys.exit(1)
 
     def get_rds_instances_by_region(self, region):
-	''' Makes an AWS API call to the list of RDS instances in a particular
-        region '''
+        """
+        Makes an AWS API call to the list of RDS instances in a particular
+        region
+        """
 
         try:
             conn = rds.connect_to_region(region)
@@ -304,16 +342,20 @@ class Ec2Inventory(object):
                 sys.exit(1)
 
     def get_instance(self, region, instance_id):
-        ''' Gets details about a specific instance '''
+        """
+        Gets details about a specific instance
+        """
         if self.eucalyptus:
             conn = boto.connect_euca(self.eucalyptus_host)
             conn.APIVersion = '2010-08-31'
         else:
             conn = ec2.connect_to_region(region)
 
-        # connect_to_region will fail "silently" by returning None if the region name is wrong or not supported
+        # connect_to_region will fail "silently" by returning None if the
+        # region name is wrong or not supported
         if conn is None:
-            print("region name: %s likely not supported, or AWS is down.  connection to region failed." % region)
+            print("region name: %s likely not supported, or AWS is down.  "
+                  "connection to region failed." % region)
             sys.exit(1)
 
         reservations = conn.get_all_instances([instance_id])
@@ -321,10 +363,11 @@ class Ec2Inventory(object):
             for instance in reservation.instances:
                 return instance
 
-
     def add_instance(self, instance, region):
-        ''' Adds an instance to the inventory and index, as long as it is
-        addressable '''
+        """
+        Adds an instance to the inventory and index, as long as it is
+        addressable
+        """
 
         # Only want running instances
         if instance.state != 'running':
@@ -334,7 +377,7 @@ class Ec2Inventory(object):
         if instance.subnet_id:
             dest = getattr(instance, self.vpc_destination_variable)
         else:
-            dest =  getattr(instance, self.destination_variable)
+            dest = getattr(instance, self.destination_variable)
 
         if not dest:
             # Skip instances we cannot address (e.g. private VPC subnet)
@@ -353,12 +396,20 @@ class Ec2Inventory(object):
         self.push(self.inventory, instance.placement, dest)
 
         # Inventory: Group by instance type
-        self.push(self.inventory, self.to_safe('type_' + instance.instance_type), dest)
+        self.push(
+            self.inventory,
+            self.to_safe('type_' + instance.instance_type),
+            dest
+        )
 
         # Inventory: Group by key pair
         if instance.key_name:
-            self.push(self.inventory, self.to_safe('key_' + instance.key_name), dest)
-        
+            self.push(
+                self.inventory,
+                self.to_safe('key_' + instance.key_name),
+                dest
+            )
+
         # Inventory: Group by security group
         try:
             for group in instance.groups:
@@ -383,22 +434,24 @@ class Ec2Inventory(object):
         # Global Tag: tag all EC2 instances
         self.push(self.inventory, 'ec2', dest)
 
-        self.inventory["_meta"]["hostvars"][dest] = self.get_host_info_dict_from_instance(instance)
-
+        self.inventory["_meta"]["hostvars"][dest] = \
+            self.get_host_info_dict_from_instance(instance)
 
     def add_rds_instance(self, instance, region):
-        ''' Adds an RDS instance to the inventory and index, as long as it is
-        addressable '''
+        """
+        Adds an RDS instance to the inventory and index, as long as it is
+        addressable
+        """
 
         # Only want available instances
         if instance.status != 'available':
             return
 
         # Select the best destination address
-        #if instance.subnet_id:
-            #dest = getattr(instance, self.vpc_destination_variable)
-        #else:
-            #dest =  getattr(instance, self.destination_variable)
+        # if instance.subnet_id:
+            # dest = getattr(instance, self.vpc_destination_variable)
+        # else:
+            # dest =  getattr(instance, self.destination_variable)
         dest = instance.endpoint[0]
 
         if not dest:
@@ -416,14 +469,20 @@ class Ec2Inventory(object):
 
         # Inventory: Group by availability zone
         self.push(self.inventory, instance.availability_zone, dest)
-        
+
         # Inventory: Group by instance type
-        self.push(self.inventory, self.to_safe('type_' + instance.instance_class), dest)
-        
+        self.push(
+            self.inventory,
+            self.to_safe('type_' + instance.instance_class),
+            dest
+        )
+
         # Inventory: Group by security group
         try:
             if instance.security_group:
-                key = self.to_safe("security_group_" + instance.security_group.name)
+                key = self.to_safe(
+                    "security_group_" + instance.security_group.name
+                )
                 self.push(self.inventory, key, dest)
         except AttributeError:
             print 'Package boto seems a bit older.'
@@ -434,21 +493,28 @@ class Ec2Inventory(object):
         self.push(self.inventory, self.to_safe("rds_" + instance.engine), dest)
 
         # Inventory: Group by parameter group
-        self.push(self.inventory, self.to_safe("rds_parameter_group_" + instance.parameter_group.name), dest)
+        self.push(
+            self.inventory,
+            self.to_safe(
+                "rds_parameter_group_%s" % instance.parameter_group.name
+            ),
+            dest
+        )
 
         # Global Tag: all RDS instances
         self.push(self.inventory, 'rds', dest)
 
-
     def get_route53_records(self):
-        ''' Get and store the map of resource records to domain names that
-        point to them. '''
+        """
+        Get and store the map of resource records to domain names that point to
+        them.
+        """
 
         r53_conn = route53.Route53Connection()
         all_zones = r53_conn.get_zones()
 
-        route53_zones = [ zone for zone in all_zones if zone.name[:-1]
-                          not in self.route53_excluded_zones ]
+        route53_zones = [zone for zone in all_zones if zone.name[:-1]
+                         not in self.route53_excluded_zones]
 
         self.route53_records = {}
 
@@ -465,14 +531,15 @@ class Ec2Inventory(object):
                     self.route53_records.setdefault(resource, set())
                     self.route53_records[resource].add(record_name)
 
-
     def get_instance_route53_names(self, instance):
-        ''' Check if an instance is referenced in the records we have from
-        Route53. If it is, return the list of domain names pointing to said
-        instance. If nothing points to it, return an empty list. '''
+        """
+        Check if an instance is referenced in the records we have from Route53.
+        If it is, return the list of domain names pointing to said instance.
+        If nothing points to it, return an empty list.
+        """
 
-        instance_attributes = [ 'public_dns_name', 'private_dns_name',
-                                'ip_address', 'private_ip_address' ]
+        instance_attributes = ['public_dns_name', 'private_dns_name',
+                               'ip_address', 'private_ip_address']
 
         name_list = set()
 
@@ -487,7 +554,6 @@ class Ec2Inventory(object):
 
         return list(name_list)
 
-
     def get_host_info_dict_from_instance(self, instance):
         instance_vars = {}
         for key in vars(instance):
@@ -495,7 +561,8 @@ class Ec2Inventory(object):
             key = self.to_safe('ec2_' + key)
 
             # Handle complex types
-            # state/previous_state changed to properties in boto in https://github.com/boto/boto/commit/a23c379837f698212252720d2af8dec0325c9518
+            # state/previous_state changed to properties in boto in
+            # https://github.com/boto/boto/commit/a23c379837f698212252720d2af8dec0325c9518
             if key == 'ec2__state':
                 instance_vars['ec2_state'] = instance.state or ''
                 instance_vars['ec2_state_code'] = instance.state_code
@@ -506,7 +573,7 @@ class Ec2Inventory(object):
                 instance_vars[key] = value
             elif type(value) in [str, unicode]:
                 instance_vars[key] = value.strip()
-            elif type(value) == type(None):
+            elif isinstance(value, type(None)):
                 instance_vars[key] = ''
             elif key == 'ec2_region':
                 instance_vars[key] = value.name
@@ -527,77 +594,91 @@ class Ec2Inventory(object):
             else:
                 pass
                 # TODO Product codes if someone finds them useful
-                #print key
-                #print type(value)
-                #print value
+                # print key
+                # print type(value)
+                # print value
 
         return instance_vars
 
     def get_host_info(self):
-        ''' Get variables about a specific host '''
+        """
+        Get variables about a specific host
+        """
 
         if len(self.index) == 0:
             # Need to load index from cache
             self.load_index_from_cache()
 
-        if not self.args.host in self.index:
+        if self.args.host not in self.index:
             # try updating the cache
             self.do_api_calls_update_cache()
-            if not self.args.host in self.index:
-                # host migh not exist anymore
+            if self.args.host not in self.index:
+                # host might not exist anymore
                 return self.json_format_dict({}, True)
 
         (region, instance_id) = self.index[self.args.host]
 
         instance = self.get_instance(region, instance_id)
-        return self.json_format_dict(self.get_host_info_dict_from_instance(instance), True)
 
-    def push(self, my_dict, key, element):
-        ''' Pushed an element onto an array that may not have been defined in
-        the dict '''
+        return self.json_format_dict(
+            self.get_host_info_dict_from_instance(instance),
+            True
+        )
+
+    @staticmethod
+    def push(my_dict, key, element):
+        """
+        Pushed an element onto an array that may not have been defined in the
+        dict
+        """
 
         if key in my_dict:
-            my_dict[key].append(element);
+            my_dict[key].append(element)
         else:
             my_dict[key] = [element]
 
-
     def get_inventory_from_cache(self):
-        ''' Reads the inventory from the cache file and returns it as a JSON
-        object '''
+        """
+        Reads the inventory from the cache file and returns it as a JSON object
+        """
 
         cache = open(self.cache_path_cache, 'r')
         json_inventory = cache.read()
         return json_inventory
 
-
     def load_index_from_cache(self):
-        ''' Reads the index from the cache file sets self.index '''
+        """
+        Reads the index from the cache file sets self.index
+        """
 
         cache = open(self.cache_path_index, 'r')
         json_index = cache.read()
         self.index = json.loads(json_index)
 
-
     def write_to_cache(self, data, filename):
-        ''' Writes data in JSON format to a file '''
+        """
+        Writes data in JSON format to a file
+        """
 
         json_data = self.json_format_dict(data, True)
         cache = open(filename, 'w')
         cache.write(json_data)
         cache.close()
 
-
-    def to_safe(self, word):
-        ''' Converts 'bad' characters in a string to underscores so they can be
-        used as Ansible groups '''
+    @staticmethod
+    def to_safe(word):
+        """
+        Converts 'bad' characters in a string to underscores so they can be
+        used as Ansible groups
+        """
 
         return re.sub("[^A-Za-z0-9\-]", "_", word)
 
-
-    def json_format_dict(self, data, pretty=False):
-        ''' Converts a dict to a JSON object and dumps it as a formatted
-        string '''
+    @staticmethod
+    def json_format_dict(data, pretty=False):
+        """
+        Converts a dict to a JSON object and dumps it as a formatted string
+        """
 
         if pretty:
             return json.dumps(data, sort_keys=True, indent=2)
@@ -606,5 +687,5 @@ class Ec2Inventory(object):
 
 
 # Run the script
-Ec2Inventory()
-
+if __name__ == "__main__":
+    Ec2Inventory()
