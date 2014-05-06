@@ -123,6 +123,7 @@ import boto
 from boto import ec2
 from boto import rds
 from boto import route53
+import boto.ec2.elb as elb
 import ConfigParser
 
 try:
@@ -165,6 +166,8 @@ class Ec2Inventory(object):
         # Read settings and parse CLI arguments
         self.read_settings()
         self.parse_cli_args()
+
+        data_to_print = ''
 
         # Cache
         if self.args.refresh_cache:
@@ -287,8 +290,9 @@ class Ec2Inventory(object):
             self.get_route53_records()
 
         for region in self.regions:
-            self.get_instances_by_region(region)
-            self.get_rds_instances_by_region(region)
+            #self.get_instances_by_region(region)
+            #self.get_rds_instances_by_region(region)
+            self.get_elb_instances_by_region(region)
 
         self.write_to_cache(self.inventory, self.cache_path_cache)
         self.write_to_cache(self.index, self.cache_path_index)
@@ -336,6 +340,22 @@ class Ec2Inventory(object):
                 instances = conn.get_all_dbinstances()
                 for instance in instances:
                     self.add_rds_instance(instance, region)
+        except boto.exception.BotoServerError, e:
+            if not e.reason == "Forbidden":
+                print "Looks like AWS RDS is down: "
+                print e
+                sys.exit(1)
+
+    def get_elb_instances_by_region(self, region):
+        """
+        Get and store the list of ELB instances from AWS
+        """
+        try:
+            conn = elb.connect_to_region(region)
+            if conn:
+                instances = conn.get_all_load_balancers()
+                for instance in instances:
+                    self.add_elb_instance(instance, region)
         except boto.exception.BotoServerError, e:
             if not e.reason == "Forbidden":
                 print "Looks like AWS RDS is down: "
@@ -437,6 +457,19 @@ class Ec2Inventory(object):
 
         self.inventory["_meta"]["hostvars"][dest] = \
             self.get_host_info_dict_from_instance(instance)
+
+    def add_elb_instance(self, instance, region):
+        """
+        Adds an RDS instance to the inventory and index, as long as it is
+        addressable
+        """
+        public_props = (name for name in dir(instance) if
+                        not name.startswith('_'))
+        for name in public_props:
+            print "%s: %s" % (name, getattr(instance, name))
+
+        print instance.dns_name
+        sys.exit(0)
 
     def add_rds_instance(self, instance, region):
         """
